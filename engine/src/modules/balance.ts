@@ -1,4 +1,4 @@
-import type { CURRENCY_TYPE } from "./matchingEngine"
+import type { CURRENCY_TYPE } from "../utils/types"
 
 
 export default class Balance{

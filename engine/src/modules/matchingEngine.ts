@@ -1,11 +1,6 @@
 import Balance  from "./balance";
 import OrderBook from "./orderBook";
-
-export type Side = "SELL" | "BUY"
-export type Kind = "MARKET" | "LIMIT" 
-export type CURRENCY_TYPE = "USD" | "SOL" | "BTC";
-export type MARKET_ASSETS = "SOL" | "BTC"
-export type Status = "FILLED" | "PENDING" | "COMPLETED" | "CANCELLED";
+import type { CURRENCY_TYPE, Kind, MARKET_ASSETS, Side, Status } from "../utils/types"
 
 
 interface EngineResponse {
@@ -25,7 +20,13 @@ export default class MatchingEngine{
     }
 
     createOrder( correlationId:string , userId :string,symbol:MARKET_ASSETS ,  qty:number , kind:Kind , side: Side , price? : number  ): EngineResponse{
-        
+        if(!correlationId || !userId || !symbol || !qty || !kind || !side ){
+            return {
+                    correlationId, 
+                    ok:false,
+                    error:"please provide all teh arguments"
+                }
+        }
         if(kind === "LIMIT"){
             if(!price){
                 return {
