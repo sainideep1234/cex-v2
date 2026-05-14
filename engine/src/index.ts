@@ -1,13 +1,17 @@
 import "dotenv/config";
 import { createClient } from "redis";
 import { env } from "./utils/env.js";
+import MatchingEngine from "./modules/matchingEngine.js";
+import type { CURRENCY_TYPE, MARKET_ASSETS } from "./utils/types.js";
+
+const matchingEngine = new MatchingEngine()
 
 export type EngineCommandType =
   | "create_order"
   | "get_depth"
   | "get_user_balance"
   | "get_order"
-  | "cancel_order";
+  | "cancel_order"
 
 export interface EngineRequest {
   correlationId: string;
@@ -68,6 +72,8 @@ function handleEngineRequest(message: EngineRequest): unknown {
 
   // just checking the flow, remove this when you start implementing the logic
   if (message.type === "create_order") {
+    const userId = message.payload.userId as string;
+    const symbol = message.payload.symbol 
     return {
       orderId: crypto.randomUUID(),
       status: "filled",
@@ -85,8 +91,35 @@ function handleEngineRequest(message: EngineRequest): unknown {
       ],
       note: "Smoke-test response only. Students must replace this with real matching logic.",
     };
+  
   }
 
+  else if(message.type === "get_depth"){
+    const symbol = message.payload.symbol as MARKET_ASSETS;
+    const depth = matchingEngine.getOrderBookDepth(symbol);
+    return depth
+  }
+
+  else if(message.type === "cancel_order"){
+    const userId = message.payload.userId as string;
+    const orderId = message.payload.orderId as string;
+
+    matchingEngine.cancelOrder(userId , orderId);
+    return {
+      message : `you order with with orderId : ${orderId} , cancelled succesfully`
+    }
+
+  }
+
+  else if(message.type === "get_order"){
+
+  }
+  else if(message.type === "get_user_balance"){
+    const userId = message.payload.userId as string;
+    const currencyType = message.payload.currencyType as CURRENCY_TYPE;
+
+    return matchingEngine.getAssetBalance(userId , currencyType)
+  }
   throw new Error("TODO(student): implement this engine request type");
 }
 

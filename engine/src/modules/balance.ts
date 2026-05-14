@@ -1,5 +1,5 @@
 import { resolve } from "bun";
-import type { CURRENCY_TYPE } from "../utils/types"
+import type { CURRENCY_TYPE, MARKET_ASSETS } from "../utils/types"
 
 
 export default class Balance{
@@ -15,7 +15,7 @@ export default class Balance{
     getOrCreateUserId(userId:string){
         let userPresent = this.balance[userId];
         if(!userPresent){
-            userPresent = {}
+            userPresent = {"USD": { total : 1000}}
             this.balance[userId] = userPresent;
         }
 
@@ -36,14 +36,14 @@ export default class Balance{
         return currencyDetails.total
     }
 
-    addCurrency(userId : string , amount : number ,currencyType: CURRENCY_TYPE ){
+    addAssetBalance(userId : string , amount : number ,currencyType: CURRENCY_TYPE ){
         const userPresent = this.getOrCreateUserId(userId);
 
         const currencyDetaild = this.getOrCreateUserCurrency(userId , currencyType);
         return currencyDetaild.total+=amount
     }
 
-    deductBalance(userId : string , amount : number , currencyType : CURRENCY_TYPE){
+    deductAssetBalance(userId : string , amount : number , currencyType : CURRENCY_TYPE){
         const userPresent = this.getOrCreateUserId(userId);
         const currencyDetails = this.getOrCreateUserCurrency(userId , currencyType);
         currencyDetails.total -= amount;
@@ -51,16 +51,32 @@ export default class Balance{
             delete userPresent[currencyType] 
         }
     }
-    getUserAllAssets(userId:string){
-        const presentUser = this.getOrCreateUserId;
+
+    getAssetBalance(userId : string , currencyType:CURRENCY_TYPE){
+        const currencyDetails  = this.getOrCreateUserCurrency(userId , currencyType);
+        return currencyDetails.total
+    }
+
+    UpdateAssetQty(userId: string , currencyType: CURRENCY_TYPE , updatedBalance : number){
+        let user = this.balance[userId]!
+        let userCurrency = user[currencyType]!;
+        userCurrency.total = updatedBalance
+    }
+
+    getAllAssets(userId:string){
+        const presentUser = this.getOrCreateUserId(userId);
         let allAssets:[CURRENCY_TYPE  , number][] = []
         
         Object.keys(presentUser).forEach((currency)=>{
             const curr = currency as CURRENCY_TYPE
-            allAssets.push([curr , presentUser[curr]])
+            allAssets.push([curr , presentUser[curr]?.total!])
         })
-
         return allAssets
     }
-    getUserAssetBalance(userId : string , symbol:string):number{}
+
+    deleteAssetEntry(userId : string , currencyType:CURRENCY_TYPE ){
+        const user = this.balance[userId]!;
+        delete user[currencyType];
+    }
+    
 }

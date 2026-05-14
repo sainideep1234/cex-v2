@@ -1,6 +1,7 @@
 import {OrderedMap}  from "js-sdsl"
 import type { Kind, MARKET_ASSETS, Side, Status } from "../utils/types"
-import { createDocumentRegistry, createSolutionBuilderWithWatchHost } from "typescript"
+import { createDocumentRegistry, createSolutionBuilderWithWatchHost, getPreEmitDiagnostics } from "typescript"
+import { serve } from "bun"
 
 
 type Fills = {
@@ -8,7 +9,7 @@ type Fills = {
     price:number
 }
 
-interface createOrderResponse{
+interface CreateOrderResponse{
     orderId: string , 
     filledQty :number , 
     totalQty:number, 
@@ -30,9 +31,23 @@ interface PriceLevel{
 }
 
 
-interface OrderDetail { orderId : string ,symbol : MARKET_ASSETS, qty : number , price :number , side : Side , kind : Kind , status: Status , createdAt : Date }
+interface OrderDetail { 
+    orderId : string ,
+    symbol : MARKET_ASSETS,
+    qty : number ,
+    price :number , 
+    side : Side , 
+    kind : Kind , 
+    status: Status , 
+    createdAt : Date
+}
 
-interface  FillDetail  {total:number , filled:number , price:number ,  createdAt:Date}
+interface  FillDetail {
+    total:number ,
+    filled:number , 
+    price:number ,  
+    createdAt:Date
+}
 
 interface createUserOrderResponse {
     orderId : string , 
@@ -80,10 +95,10 @@ export default class OrderBook{
         this.orders = {}
     }
 
-    // name createOrderResponse (NOOOO ), Order (YESSS)
+    // name CreateOrderResponse (NOOOO ), Order (YESSS)
    
     /*
-    createLimitOrder(userId:string , symbol :MARKET_ASSETS , qty: number , price: number, side:Side ):createOrderResponse {
+    createLimitOrder(userId:string , symbol :MARKET_ASSETS , qty: number , price: number, side:Side ):CreateOrderResponse {
         // create order 
         const orderResponse = this.createUserOrder(side,qty,userId, price,"LIMIT")
 
@@ -437,14 +452,72 @@ export default class OrderBook{
 
     
     createOderLimitV2(userId : string , symbol : MARKET_ASSETS , qty : number , price : number , side : Side ){
-        let currentOrder = this.createUserOrder(side , qty , userId , price , "LIMIT" , symbol )
+    let currentOrder = this.createUserOrder(side , qty  , userId , price , "LIMIT" , symbol );
+    
+    const assetMarket = this.getOrCreateMarket(symbol);
+    
+    const oppositeOfCurrentSide = side === "BUY" ? "ASKS" : "BIDS";
+    const oppositeSide = assetMarket[oppositeOfCurrentSide];
+
+    let pendingQty = qty
+        while(pendingQty > 0 && !oppositeSide.empty()) {
+            // keep matching ordre with opposite best prive level
+            const topEle = oppositeSide.front()
+            
+            // if bestprice is less than what we want, we leave
+            if(oppositeOfCurrentSide == 'ASKS' ) {
+                if(topEle![0] > currentOrder.price) {
+                    break 
+                }
+            }else {
+                if(topEle![0] < currentOrder.price) break
+            }
+
+            // otherwise match with this level as much as u can
+
+
+            const orders = topEle![1].orders
+
+           while(orders.length !== 0 ) {
+
+                let currentOppositeOrder= orders[0];
+
+                const availableQty = currentOppositeOrder?.totalQty! - currentOppositeOrder?.filledQty!;
+
+                if(availableQty >= pendingQty){
+                    // increase filled qty 
+                    currentOppositeOrder!.filledQty! += pendingQty
+                    // decrease pendingqty 
+                    pendingQty = 0
+                    break;
+
+                }else{
+                 pendingQty -= availableQty;
+                 currentOppositeOrder!.filledQty! += availableQty;
+                orders.shift();
+                }
+
+            }
+            if(orders.length === 0 ){
+               oppositeSide.eraseElementByKey(topEle![0]);
+            }
+            
+
+        }
+        const currentSide = side === "BUY" ? "BIDS" : "ASKS"
+        const sameSide = assetMarket[currentSide];
+        let priceLevel = sameSide.getElementByKey(currentOrder.price);
+        if(!priceLevel){
+            priceLevel = {orders:[] , total: 0}
+        }
+        // to do handle this error
+        priceLevel.orders.push(currentOrder);
+
+        sameSide.setElement(currentOrder.price , priceLevel);
         
 
     }
 
-
-
-    
     createUserOrder( side : Side , qty : number , userId : string , price : number , kind : Kind , symbol:MARKET_ASSETS ):createUserOrderResponse{
         
         const userOrder = this.orders[userId]
@@ -468,7 +541,7 @@ export default class OrderBook{
         return orderDetails
     }
 
-      getOrCreateMarket(symbol:MARKET_ASSETS){
+    getOrCreateMarket(symbol:MARKET_ASSETS){
         if(!this.orderBook[symbol]){
             this.orderBook[symbol] = {
                 BIDS: new OrderedMap([] , (a , b)=> b - a),
@@ -479,8 +552,32 @@ export default class OrderBook{
         return this.orderBook[symbol]
     }
 
-    // createMarketOrder(userId:string , symbol :string , qty: number , side:Side  ):createOrderResponse{}
+    createMarketOrder(userId:string , symbol :string , qty: number , side:Side  ):any{
+        
+    }
     
+
+    getPriceAfterSweepSimulation( qty : number  , symbol : MARKET_ASSETS , side : Side  ):number{
+        const asserMarket = this.getOrCreateMarket(symbol);
+        let oppositeSide:"ASKS" | "BIDS" = (side === "BUY") ? "ASKS" : "BIDS";
+        let remainingQty = qty;
+        let sweepPrice = 0;
+
+        asserMarket[oppositeSide].forEach((priceLevel)=>{
+            if(!priceLevel){
+                return // to do no order to match
+            }
+            let bestOrderSidePrice = priceLevel[0];
+            let bestOrderSidePriceDetails = priceLevel[1];
+            if(remainingQty > 0 ){
+                remainingQty-=bestOrderSidePriceDetails.total;
+                sweepPrice+=bestOrderSidePrice
+            }
+        });
+
+        return sweepPrice;
+    }
+
     cancelOrder(userId:string , orderId:string){
         // get uder order from orders
 
@@ -515,11 +612,7 @@ export default class OrderBook{
 
 
     }     
-  
-
         
-    // getPriceAfterSweepSimulation(qty : number, symbol:string):number{}
-
     getDepth(symbol:MARKET_ASSETS ){
        
         const assetMarket = this.getOrCreateMarket(symbol);
@@ -539,5 +632,20 @@ export default class OrderBook{
         return {bidDepth , askDepth}
     }
     
-    
+    getOrdersOfUser(userId:string){
+        const userOrders =  this.orders[userId]
+        if(userOrders){
+           return  userOrders
+        }
+
+        return []
+    }
+
+    getFillsOfUser(userId: string){
+        const userPresent = this.fills[userId];
+        if(userPresent){
+            return userPresent
+        }
+        return {}
+    }
 }
