@@ -341,7 +341,7 @@ For this assignment:
 - seed balances in memory when the engine starts or when a user is first seen
 - do not persist balances to the database
 - `get_user_balance` should return balances from engine memory
-- bonus: lock funds/MARKET_ASSETS for open limit orders
+- bonus: lock funds/market_ASSETS for open limit orders
 
 ## Cancel Rules
 

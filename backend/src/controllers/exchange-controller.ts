@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import {
-  orderBodySchema,
+  orderBodySchemaWithNormalization,
   orderIdParamSchema,
   symbolParamSchema,
 } from "../types/exchange-schema.js";
@@ -15,7 +15,7 @@ function getUserId(req: Request): string {
 export async function createOrder(req: Request, res: Response): Promise<void> {
   const userId = getUserId(req);
 
-  const parsedBody = orderBodySchema.safeParse(req.body);
+  const parsedBody = orderBodySchemaWithNormalization.safeParse(req.body);
   if (!parsedBody.success) {
     sendValidationError(res, parsedBody.error);
     return;

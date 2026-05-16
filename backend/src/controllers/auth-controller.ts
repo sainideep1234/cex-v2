@@ -14,7 +14,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
 
   const { username, password } = parsedBody.data;
   const hashedPassword = await bcrypt.hash(password, 10);
- 
+
   try {
     const user = await prisma.user.create({
       data: {
@@ -34,5 +34,41 @@ export async function signup(req: Request, res: Response): Promise<void> {
 }
 
 export async function signin(req: Request, res: Response): Promise<void> {
-  //TODO: Implement signin logic
+  const { success, data, error } = authSchema.safeParse(req.body);
+
+  if (!success) {
+    sendValidationError(res, error);
+    return
+  }
+
+  const { username, password } = data;
+
+  const user = await prisma.user.findFirst({
+    where: {
+      username
+    }
+  })
+
+  if (!user) {
+    res.status(403).json({
+      message: "user is not present "
+    })
+    return
+  }
+  
+  const isPassword = await  bcrypt.compare(password, user?.password);
+  if (!isPassword) {
+    res.status(403).json({
+      message: "user password is wrong"
+    })
+    return;
+  }
+
+  res.status(201).json({
+    token: createToken({ userId: user.id }),
+    userId: user.id,
+    username: user.username,
+  });
+
+
 }

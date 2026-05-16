@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createClient } from "redis";
 import { env } from "./utils/env.js";
 import MatchingEngine from "./modules/matchingEngine.js";
-import type { CURRENCY_TYPE, MARKET_ASSETS } from "./utils/types.js";
+import type { CURRENCY_TYPE, Kind, MARKET_ASSETS, Side } from "./utils/types.js";
 
 const matchingEngine = new MatchingEngine()
 
@@ -55,77 +55,45 @@ async function sendResponse(responseQueue: string, response: EngineResponse): Pr
 }
 
 function handleEngineRequest(message: EngineRequest): unknown {
-  /**
-   * TODO(student):
-   * 1. Check _message.type.
-   * 2. Read _message.payload.
-   * 3. Call your order book / balance / order logic.
-   * 4. Return the data that should go back to the backend.
-   *
-   * Required message types:
-   * - create_order
-   * - get_depth
-   * - get_user_balance
-   * - get_order
-   * - cancel_order
-   */
 
-  // just checking the flow, remove this when you start implementing the logic
   if (message.type === "create_order") {
-    const userId = message.payload.userId as string;
-    const symbol = message.payload.symbol 
-    return {
-      orderId: crypto.randomUUID(),
-      status: "filled",
-      filledQty: DUMMY_SELL_ORDER.qty,
-      averagePrice: DUMMY_SELL_ORDER.price,
-      fills: [
-        {
-          fillId: crypto.randomUUID(),
-          symbol: DUMMY_SELL_ORDER.symbol,
-          price: DUMMY_SELL_ORDER.price,
-          qty: DUMMY_SELL_ORDER.qty,
-          buyOrderId: "request-buy-order",
-          sellOrderId: DUMMY_SELL_ORDER.orderId,
-        },
-      ],
-      note: "Smoke-test response only. Students must replace this with real matching logic.",
-    };
-  
+    const { userId, type, symbol, side, price, qty } = message.payload;
+    const orderFilledDetails = matchingEngine.createOrder(message.correlationId, userId as string, symbol as MARKET_ASSETS, qty as number, type as Kind, side as Side, price as number);
+    return orderFilledDetails;
   }
 
-  else if(message.type === "get_depth"){
+  else if (message.type === "get_depth") {
     const symbol = message.payload.symbol as MARKET_ASSETS;
-    const depth = matchingEngine.getOrderBookDepth(symbol);
+    const depth = matchingEngine.getOrderBookDepth(message.correlationId, symbol);
     return depth
   }
 
-  else if(message.type === "cancel_order"){
+  else if (message.type === "cancel_order") {
     const userId = message.payload.userId as string;
     const orderId = message.payload.orderId as string;
 
-    matchingEngine.cancelOrder(userId , orderId);
+    matchingEngine.cancelOrder(message.correlationId, userId, orderId);
     return {
-      message : `you order with with orderId : ${orderId} , cancelled succesfully`
+      message: `you order with orderId : ${orderId} , cancelled successfully`
     }
 
   }
 
-  else if(message.type === "get_order"){
+  else if (message.type === "get_order") {
 
   }
-  else if(message.type === "get_user_balance"){
+  else if (message.type === "get_user_balance") {
     const userId = message.payload.userId as string;
     const currencyType = message.payload.currencyType as CURRENCY_TYPE;
 
-    return matchingEngine.getAssetBalance(userId , currencyType)
+    return matchingEngine.getAssetBalance(message.correlationId, userId, currencyType)
   }
   throw new Error("TODO(student): implement this engine request type");
 }
 
 console.log(`Engine listening on Redis queue: ${env.incomingQueue}`);
 
-for (;;) {
+for (; ;) {
   const item = await brokerClient.brPop(env.incomingQueue, 0);
   if (!item) continue;
 
