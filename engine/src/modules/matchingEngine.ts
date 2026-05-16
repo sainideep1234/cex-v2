@@ -1,8 +1,6 @@
 import Balance  from "./balance";
 import OrderBook from "./orderBook";
 import type { CURRENCY_TYPE, Kind, MARKET_ASSETS, Side, Status } from "../utils/types"
-import { createModuleResolutionCache } from "typescript";
-import { randomUUIDv5 } from "bun";
 
 
 interface EngineResponse {
@@ -20,7 +18,9 @@ export default class MatchingEngine{
         this.orderBook = new OrderBook();
         this.balance = new Balance();
     }
+ 
     
+
     createOrder( correlationId:string , userId :string, symbol:MARKET_ASSETS ,  qty:number , kind:Kind , side: Side , price? : number  ): EngineResponse{
         if(!correlationId || !userId || !symbol || !qty || !kind || !side ){
             return {
@@ -48,6 +48,7 @@ export default class MatchingEngine{
                     // call create order in orderBook
                     const orderDetails = this.orderBook.createLimitOrder(userId  , symbol , qty , price , "BUY"  );
                     
+                    // TO DO :-  decrease the seller qty from fills
                     return {
                         correlationId , 
                         ok:true , 
@@ -64,7 +65,7 @@ export default class MatchingEngine{
             // excute sell limit order
             const userAssetQty = this.balance.getAssetBalance(userId , symbol);
             if(userAssetQty >= qty ){
-                // updatae the qty 
+                // updatae the qty  
                 let remainingQty = userAssetQty - qty;
                 this.balance.UpdateAssetQty(userId , symbol , remainingQty);
 
@@ -74,6 +75,7 @@ export default class MatchingEngine{
                 if(remainingQty === 0){
                     this.balance.deleteAssetEntry(userId , symbol);
                 }
+                // TO DO  decrease the buyer balance that comes in fills 
                 return {
                     correlationId , 
                     ok:true , 
@@ -135,6 +137,7 @@ export default class MatchingEngine{
     }
 
     cancelOrder(correlationId:string , userId :string , orderId:string){
+        // add the cancelled qty to user balance
        return  {
                 correlationId , 
                 ok:true , 
@@ -142,25 +145,7 @@ export default class MatchingEngine{
                 }
        
     }
-
-    depositeBalance(correlationId:string , userId:string , currencyType:CURRENCY_TYPE , amount : number){
-      return  {
-            correlationId , 
-            ok:true , 
-            data :this.balance.addAssetBalance(userId , amount , currencyType);
-      }
-    }
-    
-    getALlAssetOfUser(correlationId:string , userId :string){
-
-        
-      return   {
-                correlationId , 
-                ok:true , 
-                data :this.balance.getAllAssets(userId)
-      }
-    }
-    
+       
     getOrderBookDepth(correlationId:string , symbol:MARKET_ASSETS){
        return {
             correlationId , 
@@ -177,6 +162,30 @@ export default class MatchingEngine{
        }
     }
 
+
+
+
+
+
+    // extra
+    depositeBalance(correlationId:string , userId:string , currencyType:CURRENCY_TYPE , amount : number){
+      return  {
+            correlationId , 
+            ok:true , 
+            data :this.balance.addAssetBalance(userId , amount , currencyType)
+      }
+    }
+    // extra
+    getALlAssetOfUser(correlationId:string , userId :string){
+
+        
+      return   {
+                correlationId , 
+                ok:true , 
+                data :this.balance.getAllAssets(userId)
+      }
+    }
+    // extra
     getFillsOfUser(correlationId:string , userId : string){
        return {
                 correlationId , 
@@ -184,7 +193,7 @@ export default class MatchingEngine{
        data : this.orderBook.getFillsOfUser(userId)
        }
     }
-
+    // extra
     getAssetBalance( correlationId:string , userId : string , currencyType:CURRENCY_TYPE){
         if(currencyType === "USD"){
             return{

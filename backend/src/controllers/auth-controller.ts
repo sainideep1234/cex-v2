@@ -14,7 +14,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
 
   const { username, password } = parsedBody.data;
   const hashedPassword = await bcrypt.hash(password, 10);
-
+ 
   try {
     const user = await prisma.user.create({
       data: {

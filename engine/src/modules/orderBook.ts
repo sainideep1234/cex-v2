@@ -1,68 +1,75 @@
-import {OrderedMap}  from "js-sdsl"
+
+import { OrderedMap } from "js-sdsl"
 import type { Kind, MARKET_ASSETS, Side, Status } from "../utils/types"
-import { createDocumentRegistry, createSolutionBuilderWithWatchHost, getPreEmitDiagnostics } from "typescript"
-import { serve } from "bun"
+import { FILLS } from "../store/exchange-store"
+import { resolveModuleName } from "typescript"
 
 
 type Fills = {
-    qty:number,
-    price:number
+    qty: number,
+    price: number
 }
 
-interface CreateOrderResponse{
-    orderId: string , 
-    filledQty :number , 
-    totalQty:number, 
-    averagePrice : number,
+interface CreateOrderResponse {
+    orderId: string,
+    filledQty: number,
+    totalQty: number,
+    averagePrice: number,
+    status: Status,
     fills?: Fills[]
 }
 
-interface OrderBookOrder{
-    orderId:string,
-    userId:string, 
-    totalQty:number,
+interface OrderBookOrders {
+    orderId: string,
+    userId: string,
+    totalQty: number,
     filledQty: number,
     createdAt: Date
 }
 
-interface PriceLevel{
-    total:number,
-    orders:OrderBookOrder[]
+interface PriceLevel {
+    total: number,
+    orders: OrderBookOrders[]
 }
 
 
-interface OrderDetail { 
-    orderId : string ,
-    symbol : MARKET_ASSETS,
-    qty : number ,
-    price :number , 
-    side : Side , 
-    kind : Kind , 
-    status: Status , 
-    createdAt : Date
+interface OrderDetail {
+    orderId: string,
+    symbol: MARKET_ASSETS,
+    qty?: number,
+    price: number | undefined,
+    side: Side,
+    kind: Kind,
+    status: Status,
+    oppsoiteId: string,
+    createdAt: Date,
+    balance?: number
 }
 
-interface  FillDetail {
-    total:number ,
-    filled:number , 
-    price:number ,  
-    createdAt:Date
+interface FillDetail {
+    orderId: string,
+    buyerId: string,
+    sellerId: string,
+    filledQty: number,
+    totalQty: number,
+    price: number,
+    createdAt: Date
 }
 
-interface createUserOrderResponse {
-    orderId : string , 
+interface ReturnCreateUserOrder {
+    orderId: string,
     userId: string
-    qty : number , 
-    side : Side , 
-    kind : Kind , 
-    status : Status, 
-    createdAt : Date , 
-    price: number, 
-    symbol:MARKET_ASSETS
- }
+    qty: number,
+    side: Side,
+    kind: Kind,
+    status: Status,
+    createdAt: Date,
+    price: number,
+    symbol: MARKET_ASSETS
+}
 
-export default class OrderBook{
-   
+export default class OrderBook {
+
     /*
     orderBook = {
         "SOL":{
@@ -83,20 +90,20 @@ export default class OrderBook{
 
     */
 
-    private orderBook : Partial<Record< MARKET_ASSETS , {BIDS : OrderedMap<number , PriceLevel> , ASKS: OrderedMap<number , PriceLevel>}>>
-    
-    private fills: Record<string , Partial<Record< MARKET_ASSETS , FillDetail[]> >>
-    
-    private orders : Record< string , OrderDetail[]>
-    
-    constructor(){
+    private orderBook: Partial<Record<MARKET_ASSETS, { BIDS: OrderedMap<number, PriceLevel>, ASKS: OrderedMap<number, PriceLevel> }>>
+
+    private fills: FillDetail[];
+
+    private orders: Record<string, OrderDetail[]>
+
+    constructor() {
         this.orderBook = {}
-        this.fills = {}
+        this.fills = []
         this.orders = {}
     }
 
     // name CreateOrderResponse (NOOOO ), Order (YESSS)
-   
+
     /*
     createLimitOrder(userId:string , symbol :MARKET_ASSETS , qty: number , price: number, side:Side ):CreateOrderResponse {
         // create order 
@@ -338,7 +345,7 @@ export default class OrderBook{
     // createOrderLimit(userId : string , symbol : MARKET_ASSETS , qty : number , price : number , side : Side ){
     //     // create order 
     //     let currentOrder = this.createUserOrder(side , qty , userId , price , "LIMIT"  , symbol);
-        
+
     //     // match as much as we can 
     //    // get the assets 
     //     let assetMarket = this.getOrCreateMarket(currentOrder.symbol);
@@ -379,7 +386,7 @@ export default class OrderBook{
     //             }
 
     //            priceLevel.total += currentOrder.qty;
-              
+
     //            let currentOrderOrderBookDetails = {
     //                 orderId : currentOrder.orderId,
     //                 userId: currentOrder.userId,
@@ -403,7 +410,7 @@ export default class OrderBook{
     //                     // add to sameSide
     //                 }
     //                 let frontOrderRemainingQty = frontOrder?.totalQty! - frontOrder?.filledQty!;
-                    
+
     //                 if(frontOrderRemainingQty < currentOrder.qty){
     //                     while(currentOrderQtyLeft!== 0){
     //                         // eat up oder one by one
@@ -413,7 +420,7 @@ export default class OrderBook{
     //                         // add the poped order in fills array
     //                         fillsHistory.push({qty: currentOrderQtyLeft , price: bestPrice})
     //                         // update poped order  , userId status to FILLED In orders table
-                            
+
     //                         this.orders[popedOrder.userId]?.forEach((uOrder)=>{
     //                             if(uOrder.orderId === popedOrder.orderId && uOrder.status === "PENDING"){
     //                                 uOrder.status = "FILLED";
@@ -431,46 +438,46 @@ export default class OrderBook{
     //                         // remove the price from order book 
     //                     }
 
-                        
+
     //                 }
 
-                    
+
     //                 // if any order filledQty === totalQty than remove order complete
     //                 // if total === 0 return that price as well
     //             }
 
     //         }
 
-                
+
     //     }else{
     //         // add the current order in currentOrder.side side
     //     }
 
     //     // return orderDetails
-    
+
     // }
 
-    
-    createOderLimitV2(userId : string , symbol : MARKET_ASSETS , qty : number , price : number , side : Side ){
-    let currentOrder = this.createUserOrder(side , qty  , userId , price , "LIMIT" , symbol );
-    
-    const assetMarket = this.getOrCreateMarket(symbol);
-    
-    const oppositeOfCurrentSide = side === "BUY" ? "ASKS" : "BIDS";
-    const oppositeSide = assetMarket[oppositeOfCurrentSide];
 
-    let pendingQty = qty
-        while(pendingQty > 0 && !oppositeSide.empty()) {
-            // keep matching ordre with opposite best prive level
+    createLimitOrder(userId: string, symbol: MARKET_ASSETS, qty: number, price: number, side: Side) {
+        let currentOrder = this.createUserOrder(side, qty, userId, "LIMIT", symbol, price);
+
+        const assetMarket = this.getOrCreateMarket(symbol);
+
+        const oppositeOfCurrentSide = side === "BUY" ? "ASKS" : "BIDS";
+        const oppositeSide = assetMarket[oppositeOfCurrentSide];
+
+        let pendingQty = qty
+        while (pendingQty > 0 && !oppositeSide.empty()) {
+            // keep best prive level
             const topEle = oppositeSide.front()
-            
+
             // if bestprice is less than what we want, we leave
-            if(oppositeOfCurrentSide == 'ASKS' ) {
-                if(topEle![0] > currentOrder.price) {
-                    break 
+            if (oppositeOfCurrentSide == 'ASKS') {
+                if (topEle![0] > currentOrder.price) {
+                    break
                 }
-            }else {
-                if(topEle![0] < currentOrder.price) break
+            } else {
+                if (topEle![0] < currentOrder.price) break
             }
 
             // otherwise match with this level as much as u can
@@ -478,61 +485,61 @@ export default class OrderBook{
 
             const orders = topEle![1].orders
 
-           while(orders.length !== 0 ) {
+            while (orders.length !== 0) {
 
-                let currentOppositeOrder= orders[0];
+                let currentOppositeOrder = orders[0];
 
                 const availableQty = currentOppositeOrder?.totalQty! - currentOppositeOrder?.filledQty!;
 
-                if(availableQty >= pendingQty){
+                if (availableQty >= pendingQty) {
                     // increase filled qty 
                     currentOppositeOrder!.filledQty! += pendingQty
                     // decrease pendingqty 
                     pendingQty = 0
                     break;
 
-                }else{
-                 pendingQty -= availableQty;
-                 currentOppositeOrder!.filledQty! += availableQty;
-                orders.shift();
+                } else {
+                    pendingQty -= availableQty;
+                    currentOppositeOrder!.filledQty! += availableQty;
+                    orders.shift();
                 }
 
             }
-            if(orders.length === 0 ){
-               oppositeSide.eraseElementByKey(topEle![0]);
+            if (orders.length === 0) {
+                oppositeSide.eraseElementByKey(topEle![0]);
             }
-            
+
 
         }
         const currentSide = side === "BUY" ? "BIDS" : "ASKS"
         const sameSide = assetMarket[currentSide];
         let priceLevel = sameSide.getElementByKey(currentOrder.price);
-        if(!priceLevel){
-            priceLevel = {orders:[] , total: 0}
+        if (!priceLevel) {
+            priceLevel = { orders: [], total: 0 }
         }
         // to do handle this error
-        priceLevel.orders.push(currentOrder);
+        priceLevel.orders.push({ ...currentOrder, filledQty: 0, totalQty: 1 });
 
-        sameSide.setElement(currentOrder.price , priceLevel);
-        
+        sameSide.setElement(currentOrder.price, priceLevel);
+
 
     }
 
-    createUserOrder( side : Side , qty : number , userId : string , price : number , kind : Kind , symbol:MARKET_ASSETS ):createUserOrderResponse{
-        
+    createUserOrder(side: Side, qty: number, userId: string, kind: Kind, symbol: MARKET_ASSETS, price?: number, balance?: number): ReturnCreateUserOrder {
+
         const userOrder = this.orders[userId]
-        if(!userOrder){
+        if (!userOrder) {
             this.orders[userId] = []
         }
         // use crypto.randomUUID() for id
-           const orderDetails = {
+        const orderDetails = {
             orderId: crypto.randomUUID(),
-            side, 
-            price, 
+            side,
+            price,
             kind,
-            userId, 
-            qty , 
-            createdAt : new Date(),
+            userId,
+            qty,
+            createdAt: new Date(),
             status: "PENDING" as Status,
             symbol
         }
@@ -541,111 +548,326 @@ export default class OrderBook{
         return orderDetails
     }
 
-    getOrCreateMarket(symbol:MARKET_ASSETS){
-        if(!this.orderBook[symbol]){
+    getOrCreateMarket(symbol: MARKET_ASSETS) {
+        if (!this.orderBook[symbol]) {
             this.orderBook[symbol] = {
-                BIDS: new OrderedMap([] , (a , b)=> b - a),
-                ASKS:new OrderedMap([] , (a , b)=> a-b)
+                BIDS: new OrderedMap([], (a, b) => b - a),
+                ASKS: new OrderedMap([], (a, b) => a - b)
             }
         }
 
         return this.orderBook[symbol]
     }
 
-    createMarketOrder(userId:string , symbol :string , qty: number , side:Side  ):any{
-        
-    }
-    
+    createMarketOrder(userId: string, symbol: MARKET_ASSETS, qty: number, side: Side, balance: number): CreateOrderResponse {
+        const assetMarket = this.getOrCreateMarket(symbol);
+        const currentOrder = this.createUserOrder(side, qty, userId, "MARKET", symbol, undefined, balance);
 
-    getPriceAfterSweepSimulation( qty : number  , symbol : MARKET_ASSETS , side : Side  ):number{
+        const oppositeSide = side === "BUY" ? "ASKS" : "BIDS"
+        const sameSide = side === "BUY" ? "BIDS" : "ASKS";
+
+        if (side === "BUY") {
+
+            let remainingQty = currentOrder.qty;
+            let remainingBalance = balance;
+
+
+            while (remainingQty > 0 && !assetMarket[oppositeSide].empty()) {
+                const topEle = assetMarket[oppositeSide].front();
+
+                if (!topEle) {
+                    currentOrder.status = "FILLED";
+                    return {
+                        averagePrice: 0,
+                        filledQty: 0,
+                        totalQty: currentOrder.qty,
+                        orderId: currentOrder.orderId,
+                        status: currentOrder.status
+                    }
+                }
+                const [bestPrice, priceLevelOrders] = topEle;
+
+                if (bestPrice * remainingQty > balance) {
+                    //  
+                    currentOrder.status = "CANCELLED";
+                    return {
+                        averagePrice: 0,
+                        filledQty: 0,
+                        totalQty: currentOrder.qty,
+                        orderId: currentOrder.orderId,
+                        status: currentOrder.status
+                    }
+                }
+
+                if (priceLevelOrders.total > currentOrder.qty) {
+                    // excute compelet order here
+                    while (remainingQty > 0 && priceLevelOrders.orders.length !== 0 && remainingBalance !== 0) {
+                        const firstPriceLevelOrder = priceLevelOrders.orders[0];
+                        const availabelQty = firstPriceLevelOrder!.totalQty - firstPriceLevelOrder!.filledQty;
+                        remainingBalance -= remainingQty * bestPrice;
+
+                        if (availabelQty >= remainingQty) {
+                            // execute complete Order
+                            firstPriceLevelOrder!.filledQty += remainingQty;
+                            remainingQty = 0;
+                            // add buyer entry in fills table 
+                            this.fills.push({
+                                orderId: currentOrder.orderId,
+                                buyerId: userId,
+                                sellerId: firstPriceLevelOrder!.userId,
+                                filledQty: remainingQty,
+                                price: bestPrice,
+                                totalQty: currentOrder.qty,
+                                createdAt: new Date()
+                            })
+                            // added sellers entry in fills table
+                            this.fills.push({
+                                orderId: firstPriceLevelOrder!.orderId,
+                                buyerId: userId,
+                                sellerId: firstPriceLevelOrder!.userId,
+                                filledQty: remainingQty,
+                                price: bestPrice,
+                                totalQty: currentOrder.qty,
+                                createdAt: new Date()
+                            })
+                            // update order satus of buyer 
+                            let currentUserOrderStatuschange = this.orders[currentOrder.userId]?.find((order) => {
+                                return order.orderId === currentOrder.orderId
+                            })
+                            // update seller user orderId close
+                            let oppositeUserOrderStatuschange = this.orders[currentOrder.userId]?.find((order) => {
+                                return order.orderId === firstPriceLevelOrder!.orderId
+                            })
+                            currentUserOrderStatuschange!.status = "FILLED";
+                            oppositeUserOrderStatuschange!.status = "FILLED";
+
+                            return {
+                                averagePrice: bestPrice,
+                                filledQty: remainingQty,
+                                totalQty: currentOrder.price,
+                                orderId: currentOrder.orderId,
+                                status: "FILLED",
+
+                            }
+                        }
+
+                        // fill order as much as you can and pop first elememnt 
+                        firstPriceLevelOrder!.filledQty += availabelQty;
+                        remainingQty -= availabelQty;
+                        // add buyer entry in fills table 
+                        this.fills.push({
+                            buyerId: currentOrder.userId,
+                            sellerId: firstPriceLevelOrder!.userId,
+                            createdAt: new Date(),
+                            filledQty: availabelQty,
+                            totalQty: currentOrder.qty,
+                            orderId: currentOrder.orderId,
+                            price: bestPrice
+                        })
+                        // added sellers entry in fills table
+                        this.fills.push({
+                            orderId: firstPriceLevelOrder!.orderId,
+                            buyerId: userId,
+                            sellerId: firstPriceLevelOrder!.userId,
+                            filledQty: remainingQty,
+                            price: bestPrice,
+                            totalQty: currentOrder.qty,
+                            createdAt: new Date()
+                        })
+                        // update order satus of buyer 
+                        let currentUserOrderStatuschange = this.orders[currentOrder.userId]?.find((order) => {
+                            return order.orderId === currentOrder.orderId
+                        })
+                        // update seller user orderId close
+                        let oppositeUserOrderStatuschange = this.orders[currentOrder.userId]?.find((order) => {
+                            return order.orderId === firstPriceLevelOrder!.orderId
+                        })
+                        currentUserOrderStatuschange!.status = "FILLED";
+                        oppositeUserOrderStatuschange!.status = "FILLED";
+                        priceLevelOrders.orders.shift();
+
+                        if (priceLevelOrders.total === 0) {
+                            assetMarket[oppositeSide].eraseElementByKey(topEle[0]);
+                        }
+                    }
+
+                }
+
+                // eat all the price until balance gets zero
+                assetMarket![oppositeSide].eraseElementByKey(topEle[0]);
+
+            }
+        }
+
+        let remainingQty = currentOrder.qty;
+        while (remainingQty > 0 && assetMarket[oppositeSide].length !== 0) {
+            // else sell
+            if (!assetMarket[oppositeSide].front()) {
+                // TODO: change the order , status to cancelled 
+                const cancelOrder = this.orders[currentOrder.userId]?.find((order)=>{
+                    return order.orderId === currentOrder.orderId
+                })
+                cancelOrder!.status = "FILLED"
+                // TODO: return reponse 
+                return {
+                    averagePrice:0,
+                    filledQty:0,
+                     totalQty:currentOrder.qty,
+                     orderId:currentOrder.orderId,
+                     status:cancelOrder!.status,
+                }
+                
+            }
+
+            const [bestPrice, priceDetails] = assetMarket[oppositeSide].front()!;
+
+            // sell as much as i can
+
+            // eat limited order
+            if (priceDetails.total >= remainingQty) {
+                let maxQtyeBuyAtPriceLevel = priceDetails.total;
+                let maxQtySellAtPriceLevel = remainingQty - maxQtyeBuyAtPriceLevel;
+                remainingQty -= maxQtySellAtPriceLevel;
+
+                while (maxQtySellAtPriceLevel > 0 && priceDetails.orders.length !== 0) {
+
+                    let firstPriceLevelOrder = priceDetails.orders[0]!;
+                    let maxQtySellAtPriceLevelOrder = firstPriceLevelOrder.totalQty - firstPriceLevelOrder.filledQty;
+                    firstPriceLevelOrder.filledQty += maxQtySellAtPriceLevelOrder;
+
+                    maxQtySellAtPriceLevel -= maxQtySellAtPriceLevelOrder;
+
+                    const orderToChangeStatus = this.orders![firstPriceLevelOrder.userId]?.find((order) => {
+                        return firstPriceLevelOrder.orderId === currentOrder.orderId
+                    })
+                    orderToChangeStatus?.status === "FILLED";
+                    // add buyer entry in fills table 
+                    this.fills.push({
+                        orderId: currentOrder.orderId,
+                        buyerId: firstPriceLevelOrder.userId,
+                        sellerId: userId,
+                        filledQty: remainingQty,
+                        price: bestPrice,
+                        totalQty: currentOrder.qty,
+                        createdAt: new Date()
+                    })
+                    // added sellers entry in fills table
+                    this.fills.push({
+                        orderId: firstPriceLevelOrder!.orderId,
+                        buyerId: firstPriceLevelOrder.userId,
+                        sellerId: userId,
+                        filledQty: remainingQty,
+                        price: bestPrice,
+                        totalQty: currentOrder.qty,
+                        createdAt: new Date()
+                    })
+
+                    if (firstPriceLevelOrder.filledQty === firstPriceLevelOrder.totalQty) {
+                        priceDetails.orders.shift();
+                    }
+
+
+                }
+            }
+            // move to next price
+            assetMarket[oppositeSide].eraseElementByKey(bestPrice);
+        }
+    }
+
+
+    getPriceAfterSweepSimulation(qty: number, symbol: MARKET_ASSETS, side: Side): number {
         const asserMarket = this.getOrCreateMarket(symbol);
-        let oppositeSide:"ASKS" | "BIDS" = (side === "BUY") ? "ASKS" : "BIDS";
+        let oppositeSide: "ASKS" | "BIDS" = (side === "BUY") ? "ASKS" : "BIDS";
         let remainingQty = qty;
         let sweepPrice = 0;
 
-        asserMarket[oppositeSide].forEach((priceLevel)=>{
-            if(!priceLevel){
+        asserMarket[oppositeSide].forEach((priceLevel) => {
+            if (!priceLevel) {
                 return // to do no order to match
             }
             let bestOrderSidePrice = priceLevel[0];
             let bestOrderSidePriceDetails = priceLevel[1];
-            if(remainingQty > 0 ){
-                remainingQty-=bestOrderSidePriceDetails.total;
-                sweepPrice+=bestOrderSidePrice
+            if (remainingQty > 0) {
+                remainingQty -= bestOrderSidePriceDetails.total;
+                sweepPrice += bestOrderSidePrice
             }
         });
 
         return sweepPrice;
     }
 
-    cancelOrder(userId:string , orderId:string){
+    cancelOrder(userId: string, orderId: string) {
         // get uder order from orders
 
         let userOrder = this.orders[userId]
-        if(!userOrder){
-            return // to do what to return 
+        if (!userOrder) {
+            return { status: "CANCELLED", }
         }
-        let cancelOrderdetail:OrderDetail | undefined = undefined;
+        let cancelOrderdetail: OrderDetail | undefined = undefined;
 
-        cancelOrderdetail = userOrder.find((order)=>{
+        cancelOrderdetail = userOrder.find((order) => {
             return order.orderId === orderId
         })
 
-        if(!cancelOrderdetail){
-            return 
+        if (!cancelOrderdetail) {
+            return { status: "CANCELLED" }
         }
-        cancelOrderdetail.status === "CANCELLED"
-        let orderForSymbol =this.orderBook[cancelOrderdetail.symbol];
-        if(!orderForSymbol){
-            return 
-        }
+
+        cancelOrderdetail.status === "CANCELLED";
+
+        let orderForSymbol = this.orderBook[cancelOrderdetail.symbol];
+
         const side = cancelOrderdetail.side === "BUY" ? "BIDS" : "ASKS"
-        const priceLevel =orderForSymbol[side].getElementByKey(cancelOrderdetail.price);
+        const priceLevel = orderForSymbol![side].getElementByKey(cancelOrderdetail.price);
 
         if (!priceLevel) {
-            return;
+            return { status: "CANCELLED" }
         }
 
         priceLevel.orders = priceLevel.orders.filter((order) => {
             return order.orderId !== cancelOrderdetail.orderId;
         });
+        return { status: "CANCELLED" }
 
-
-    }     
-        
-    getDepth(symbol:MARKET_ASSETS ){
-       
-        const assetMarket = this.getOrCreateMarket(symbol);
-        
-        let askDepth : [number, number][] = []
-        
-        assetMarket.ASKS.forEach(([price , {total}])=>{
-            askDepth.push([price , total])
-        })
-
-        let bidDepth : [number, number][] = []
-        
-        assetMarket.BIDS.forEach(([price , {total}])=>{
-            askDepth.push([price , total])
-        })
-
-        return {bidDepth , askDepth}
     }
-    
-    getOrdersOfUser(userId:string){
-        const userOrders =  this.orders[userId]
-        if(userOrders){
-           return  userOrders
+
+    getDepth(symbol: MARKET_ASSETS) {
+
+        const assetMarket = this.getOrCreateMarket(symbol);
+
+        let askDepth: [number, number][] = []
+
+        assetMarket.ASKS.forEach(([price, { total }]) => {
+            askDepth.push([price, total])
+        })
+
+        let bidDepth: [number, number][] = []
+
+        assetMarket.BIDS.forEach(([price, { total }]) => {
+            askDepth.push([price, total])
+        })
+
+        return { bidDepth, askDepth }
+    }
+
+    getOrdersOfUser(userId: string) {
+        const userOrders = this.orders[userId]
+        if (userOrders) {
+            return userOrders
         }
 
         return []
     }
 
-    getFillsOfUser(userId: string){
-        const userPresent = this.fills[userId];
-        if(userPresent){
-            return userPresent
-        }
-        return {}
+    getFillsOfUser(userId: string) {
+        const userAsSellerFillsDetail = this.fills.filter((fill) => {
+            return fill.sellerId === userId
+        })
+
+        const userAsBuyerFillsDetails = this.fills.filter((fill) => {
+            return fill.buyerId === userId;
+        })
+
+        return [...userAsBuyerFillsDetails, ...userAsBuyerFillsDetails]
     }
 }

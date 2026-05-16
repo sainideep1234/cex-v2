@@ -3,12 +3,54 @@
   "files.autoSaveDelay": 100,
   "editor.formatOnSave": true,
   "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "vscode.typescript-language-features"
   },
   "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "todohighlight.isEnable": true,
+  "todohighlight.isCaseSensitive": false,
+  "todohighlight.keywords": [
+    {
+      "text": "TODO:",
+      "color": "#000000",
+      "backgroundColor": "#FFD700",
+      "fontWeight": "bold",
+      "overviewRulerColor": "#FFD700"
+    },
+    {
+      "text": "TODO",
+      "color": "#000000",
+      "backgroundColor": "#FFD700",
+      "fontWeight": "bold",
+      "overviewRulerColor": "#FFD700"
+    },
+    {
+      "text": "TO DO",
+      "color": "#000000",
+      "backgroundColor": "#FFD700",
+      "fontWeight": "bold",
+      "overviewRulerColor": "#FFD700"
+    },
+    {
+      "text": "FIXME:",
+      "color": "#000000",
+      "backgroundColor": "#FF6B6B",
+      "fontWeight": "bold",
+      "overviewRulerColor": "#FF6B6B"
+    },
+    {
+      "text": "FIXME",
+      "color": "#000000",
+      "backgroundColor": "#FF6B6B",
+      "fontWeight": "bold",
+      "overviewRulerColor": "#FF6B6B"
+    }
+  ]
 }
